@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "borme-radar"
+version = "0.1.0"
+description = "Monitor of Spain's Companies Register gazette (BORME, Section A) with watchlist alerts."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Alejandro Plaza Lorenzo", email = "alejandroplaza.dev@gmail.com" }]
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27,<1",
+    "rapidfuzz>=3.6,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+borme-radar = "borme_radar.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+borme_radar = ["sql/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplify
+    "RUF", # ruff-specific
+]
