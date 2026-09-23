@@ -13,12 +13,13 @@ requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27,<1",
     "rapidfuzz>=3.6,<4",
+    "truststore>=0.9",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "ruff>=0.6",
+    "ruff==0.16.8",  # pinned: formatter output must match between local runs and CI
 ]
 
 [project.scripts]
