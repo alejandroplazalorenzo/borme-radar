@@ -8,7 +8,12 @@ import httpx
 import pytest
 
 from borme_radar.httpclient import PoliteClient
-from borme_radar.source import BormeSource, section_a_documents, validate_summary
+from borme_radar.source import (
+    BormeSource,
+    section_a_documents,
+    section_documents,
+    validate_summary,
+)
 
 SUMMARY = "sumario_20260922.json"
 
@@ -19,6 +24,9 @@ def test_section_a_documents_from_real_summary(fixtures: Path) -> None:
     assert [r.document_id for r in refs] == ["BORME-A-2026-183-07", "BORME-A-2026-183-28"]
     assert [r.province for r in refs] == ["ILLES BALEARS", "MADRID"]
     assert refs[1].url_xml == "https://www.boe.es/diario_borme/xml.php?id=BORME-A-2026-183-28"
+    assert refs[1].url_pdf == (
+        "https://www.boe.es/borme/dias/2026/09/22/pdfs/BORME-A-2026-183-28.pdf"
+    )
 
 
 def test_alphabetical_index_is_skipped(fixtures: Path) -> None:
@@ -29,26 +37,44 @@ def test_alphabetical_index_is_skipped(fixtures: Path) -> None:
         for item in section.get("item", [])
     ]
     assert any(t.startswith("ÍNDICE") for t in titles)  # present in the source...
-    assert all(not r.province.startswith("ÍNDICE") for r in section_a_documents(summary))
+    assert all(not r.province.startswith("ÍNDICE") for r in section_documents(summary))
 
 
-def _summary(items: object) -> dict[str, object]:
-    return {"data": {"sumario": {"diario": {"seccion": {"codigo": "A", "item": items}}}}}
-
-
-def test_single_item_objects_are_accepted() -> None:
-    item = {
-        "identificador": "BORME-A-2026-1-28",
-        "titulo": "MADRID",
-        "url_xml": "https://www.boe.es/diario_borme/xml.php?id=BORME-A-2026-1-28",
+def _summary(*sections: tuple[str, object]) -> dict[str, object]:
+    return {
+        "data": {
+            "sumario": {"diario": {"seccion": [{"codigo": c, "item": i} for c, i in sections]}}
+        }
     }
-    assert len(section_a_documents(_summary(item))) == 1
+
+
+def _item(doc_id: str) -> dict[str, object]:
+    return {
+        "identificador": doc_id,
+        "titulo": "MADRID",
+        "url_xml": {"texto": f"https://www.boe.es/diario_borme/xml.php?id={doc_id}"},
+        "url_pdf": {"texto": f"https://www.boe.es/borme/{doc_id}.pdf"},
+    }
+
+
+def test_sections_a_and_b_are_read_c_is_not() -> None:
+    summary = _summary(
+        ("A", _item("BORME-A-2026-1-28")),  # a bare object instead of a list
+        ("B", [_item("BORME-B-2026-1-28")]),
+        ("C", [_item("BORME-C-2026-1-28")]),
+    )
+    refs = section_documents(summary)
+    assert [(r.document_id, r.section) for r in refs] == [
+        ("BORME-A-2026-1-28", "A"),
+        ("BORME-B-2026-1-28", "B"),
+    ]
+    assert refs[1].url_pdf == "https://www.boe.es/borme/BORME-B-2026-1-28.pdf"
 
 
 def test_foreign_document_urls_are_rejected() -> None:
     item = {"identificador": "X", "titulo": "MADRID", "url_xml": "https://evil.example/x.xml"}
     with pytest.raises(ValueError, match="unexpected document URL"):
-        section_a_documents(_summary([item]))
+        section_documents(_summary(("A", [item])))
 
 
 def test_truncated_summary_is_invalid(fixtures: Path) -> None:

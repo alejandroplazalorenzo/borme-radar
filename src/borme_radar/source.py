@@ -2,7 +2,9 @@
 
 * Daily summary: ``GET /datosabiertos/api/borme/sumario/YYYYMMDD`` (``Accept:
   application/json``). Days without gazette (weekends, holidays) answer 404.
-* Each Section A item links to one province document in XML (``url_xml``).
+* Each item of Sections A ("Actos inscritos") and B ("Otros actos publicados") links to
+  one province document in XML (``url_xml``) and to the official PDF (``url_pdf``).
+  Section C (legal notices) is free prose and is not read.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from borme_radar.models import DocumentRef
 
 SUMMARY_URL = "https://www.boe.es/datosabiertos/api/borme/sumario/{day:%Y%m%d}"
 ALLOWED_PREFIX = "https://www.boe.es/"
-SECTION_A = "A"
+SECTIONS = ("A", "B")
 # The last Section A item of each issue is an alphabetical index of the companies
 # already listed in the province documents: parsing it would duplicate them.
 _INDEX_TITLE_PREFIX = "ÍNDICE"
@@ -28,6 +30,13 @@ def _as_list(value: Any) -> list[Any]:
     if value is None:
         return []
     return value if isinstance(value, list) else [value]
+
+
+def _url(value: Any) -> str:
+    """URLs come either as a string or as ``{"texto": url, "szBytes": ...}``."""
+    if isinstance(value, dict):
+        value = value.get("texto", "")
+    return str(value or "")
 
 
 def validate_summary(body: bytes) -> dict[str, Any]:
@@ -45,22 +54,39 @@ def validate_xml(body: bytes) -> None:
         raise ValueError(f"XML does not parse: {exc}") from exc
 
 
-def section_a_documents(summary: dict[str, Any]) -> list[DocumentRef]:
-    """Province documents of Section A listed in a daily summary (index excluded)."""
+def section_documents(
+    summary: dict[str, Any], sections: tuple[str, ...] = SECTIONS
+) -> list[DocumentRef]:
+    """Province documents of the given sections in a daily summary (index excluded)."""
     refs: list[DocumentRef] = []
     for issue in _as_list(summary["data"]["sumario"].get("diario")):
         for section in _as_list(issue.get("seccion")):
-            if section.get("codigo") != SECTION_A:
+            code = section.get("codigo")
+            if code not in sections:
                 continue
             for item in _as_list(section.get("item")):
                 title = str(item.get("titulo", "")).strip()
-                url = str(item.get("url_xml", ""))
+                url = _url(item.get("url_xml"))
                 if title.upper().startswith(_INDEX_TITLE_PREFIX):
                     continue
                 if not url.startswith(ALLOWED_PREFIX):
                     raise ValueError(f"unexpected document URL in summary: {url!r}")
-                refs.append(DocumentRef(str(item["identificador"]), title, url))
+                pdf = _url(item.get("url_pdf"))
+                refs.append(
+                    DocumentRef(
+                        str(item["identificador"]),
+                        title,
+                        url,
+                        section=str(code),
+                        url_pdf=pdf if pdf.startswith(ALLOWED_PREFIX) else None,
+                    )
+                )
     return refs
+
+
+def section_a_documents(summary: dict[str, Any]) -> list[DocumentRef]:
+    """Section A documents only (kept for callers that do not read Section B)."""
+    return section_documents(summary, ("A",))
 
 
 class BormeSource:
@@ -68,7 +94,7 @@ class BormeSource:
         self.client = client
 
     def documents_for(self, day: date) -> list[DocumentRef] | None:
-        """Section A documents published on ``day``; None if there was no gazette."""
+        """Section A and B documents published on ``day``; None if there was no gazette."""
         url = SUMMARY_URL.format(day=day)
         try:
             body = self.client.get(
@@ -76,7 +102,7 @@ class BormeSource:
             )
         except NotFound:
             return None
-        return section_a_documents(validate_summary(body))
+        return section_documents(validate_summary(body))
 
     def document_xml(self, ref: DocumentRef) -> bytes:
         return self.client.get(ref.url_xml, validate=validate_xml)

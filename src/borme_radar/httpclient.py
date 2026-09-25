@@ -1,6 +1,7 @@
 """Polite HTTP client: timeouts, bounded retries for transient errors, permanent cache.
 
-Retry policy:
+Retry policy (a decision of this rebuild; the production system retried every error
+except 404, waiting at most 30 s):
 
 * Retried (exponential backoff): 429, any 5xx, connection errors, timeouts and
   truncated bodies (the server closed the connection early, or the payload fails the
@@ -11,6 +12,10 @@ Retry policy:
   them). A 404 raises :class:`NotFound` (for the daily summary it simply means "no
   gazette that day").
 
+Politeness: every worker thread waits ``min_interval`` seconds between its own requests
+and the caller bounds the number of threads (``--workers``, at most 4). One client is
+shared by the worker threads; its counters are updated under a lock.
+
 TLS is verified against the operating system trust store (``truststore``), so the
 client works behind corporate proxies or antivirus software that install their own
 root certificate, without ever disabling verification.
@@ -19,9 +24,11 @@ root certificate, without ever disabling verification.
 from __future__ import annotations
 
 import ssl
+import statistics
+import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
@@ -33,6 +40,7 @@ from borme_radar.cache import DiskCache
 
 CONTACT = "alejandroplaza.dev@gmail.com"
 USER_AGENT = f"borme-radar/{__version__} (open-source BORME monitor; contact: {CONTACT})"
+MAX_WORKERS = 4
 
 TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})
 _TRANSIENT_ERRORS = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
@@ -44,6 +52,10 @@ class HttpError(Exception):
 
 class NotFound(HttpError):
     """The server answered 404."""
+
+
+class NotCached(HttpError):
+    """Offline mode: the resource is not in the cache."""
 
 
 def _is_certificate_error(exc: BaseException) -> bool:
@@ -79,6 +91,11 @@ class ClientStats:
     cache_hits: int = 0
     retries: int = 0
     not_found: int = 0
+    latencies: list[float] = field(default_factory=list)  # seconds per network request
+
+    @property
+    def latency_median(self) -> float | None:
+        return statistics.median(self.latencies) if self.latencies else None
 
 
 def parse_retry_after(value: str | None, now: datetime | None = None) -> float | None:
@@ -109,20 +126,24 @@ class PoliteClient:
         policy: RetryPolicy | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        offline: bool = False,
     ) -> None:
         self.cache = cache
         self.min_interval = min_interval
         self.policy = policy or RetryPolicy()
         self.stats = ClientStats()
+        self.offline = offline
         self._sleep = sleep
         self._clock = clock
-        self._last_request: float | None = None
+        self._lock = threading.Lock()
+        self._local = threading.local()  # last request time of each worker thread
         self._http = httpx.Client(
             transport=transport,
             verify=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT),
             timeout=httpx.Timeout(timeout),
             headers={"User-Agent": USER_AGENT},
             follow_redirects=True,
+            limits=httpx.Limits(max_connections=MAX_WORKERS),
         )
 
     def close(self) -> None:
@@ -134,6 +155,10 @@ class PoliteClient:
     def __exit__(self, *_: object) -> None:
         self.close()
 
+    def _count(self, name: str) -> None:
+        with self._lock:
+            setattr(self.stats, name, getattr(self.stats, name) + 1)
+
     def get(
         self,
         url: str,
@@ -144,11 +169,14 @@ class PoliteClient:
         """GET ``url``; cached responses are returned without touching the network.
 
         ``validate`` receives the body and must raise ``ValueError`` if it is incomplete
-        or corrupt; such a response is retried and never cached.
+        or corrupt; such a response is retried and never cached. In offline mode a
+        cache miss raises :class:`NotCached`.
         """
         if self.cache is not None and (cached := self.cache.get(url)) is not None:
-            self.stats.cache_hits += 1
+            self._count("cache_hits")
             return cached
+        if self.offline:
+            raise NotCached(f"{url}: not in the cache (offline run)")
 
         for attempt in range(1, self.policy.max_attempts + 1):
             try:
@@ -163,7 +191,7 @@ class PoliteClient:
                             f"{url}: server asked to wait {exc.retry_after:.0f}s ({exc})"
                         ) from exc
                     delay = exc.retry_after
-                self.stats.retries += 1
+                self._count("retries")
                 self._sleep(delay)
                 continue
             if self.cache is not None:
@@ -172,9 +200,10 @@ class PoliteClient:
         raise AssertionError("unreachable")  # pragma: no cover
 
     def _wait_politely(self) -> None:
-        if self._last_request is None:
+        last: float | None = getattr(self._local, "last_request", None)
+        if last is None:
             return
-        remaining = self.min_interval - (self._clock() - self._last_request)
+        remaining = self.min_interval - (self._clock() - last)
         if remaining > 0:
             self._sleep(remaining)
 
@@ -185,7 +214,8 @@ class PoliteClient:
         validate: Callable[[bytes], object] | None,
     ) -> bytes:
         self._wait_politely()
-        self.stats.network_requests += 1
+        self._count("network_requests")
+        started = self._clock()
         try:
             response = self._http.get(url, headers=headers)
         except _TRANSIENT_ERRORS as exc:
@@ -193,7 +223,10 @@ class PoliteClient:
                 raise HttpError(f"{url}: TLS certificate verification failed: {exc}") from exc
             raise _Transient(f"{type(exc).__name__}: {exc}") from exc
         finally:
-            self._last_request = self._clock()
+            finished = self._clock()
+            self._local.last_request = finished
+            with self._lock:
+                self.stats.latencies.append(finished - started)
 
         status = response.status_code
         if status == 200:
@@ -205,7 +238,7 @@ class PoliteClient:
                     raise _Transient(f"invalid or truncated payload: {exc}") from exc
             return body
         if status == 404:
-            self.stats.not_found += 1
+            self._count("not_found")
             raise NotFound(f"{url}: 404 Not Found")
         if status in TRANSIENT_STATUS or status >= 500:
             retry_after = parse_retry_after(response.headers.get("Retry-After"))

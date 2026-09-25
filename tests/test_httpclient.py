@@ -15,6 +15,7 @@ from borme_radar.cache import DiskCache
 from borme_radar.httpclient import (
     CONTACT,
     HttpError,
+    NotCached,
     NotFound,
     PoliteClient,
     RetryPolicy,
@@ -216,3 +217,27 @@ def test_parse_retry_after_http_date() -> None:
     assert parse_retry_after(header, now=now) == pytest.approx(30.0)
     assert parse_retry_after("garbage") is None
     assert parse_retry_after(None) is None
+
+
+def test_offline_client_never_touches_the_network(tmp_path: Path) -> None:
+    fake = FakeTime()
+    handler, seen = scripted(httpx.Response(200, content=b"x"))
+    cache = DiskCache(tmp_path)
+    cache.put(URL, b"cached")
+    client = PoliteClient(
+        cache=cache, transport=httpx.MockTransport(handler), offline=True, sleep=fake.sleep
+    )
+    assert client.get(URL) == b"cached"
+    with pytest.raises(NotCached):
+        client.get(URL + "-missing")
+    assert seen == []
+
+
+def test_latency_of_each_network_request_is_measured() -> None:
+    fake = FakeTime()
+    handler, _ = scripted(httpx.Response(200), httpx.Response(200))
+    client = make_client(handler, fake)
+    client.get(URL)
+    client.get(URL + "-2")
+    assert len(client.stats.latencies) == 2
+    assert client.stats.latency_median == 0.0  # the fake clock does not move on its own
