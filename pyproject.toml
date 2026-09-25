@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "borme-radar"
-version = "0.1.0"
-description = "Monitor of Spain's Companies Register gazette (BORME, Section A) with watchlist alerts."
+version = "0.2.0"
+description = "Keeps company records in sync with Spain's Companies Register gazette (BORME) and discovers new companies of watched groups."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Alejandro Plaza Lorenzo", email = "alejandroplaza.dev@gmail.com" }]

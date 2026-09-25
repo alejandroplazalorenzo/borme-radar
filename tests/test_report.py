@@ -1,62 +1,68 @@
+"""Report: seven sections, clusters of powers aggregated, no names in the shared version."""
+
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 
-from borme_radar.matching import WatchEntry, match_names
-from borme_radar.normalize import normalize_name
-from borme_radar.report import render_alerts
-from borme_radar.store import StoredAct, StoredAnnouncement
+from borme_radar import record, store
+from borme_radar.discovery import GroupIndex
+from borme_radar.matching import Matcher
+from borme_radar.pipeline import Pipeline
+from borme_radar.report import render
+from conftest import announcement, document, watched
+
+DAY = date(2026, 9, 21)
 
 
-def entry(name: str) -> WatchEntry:
-    return WatchEntry(name, normalize_name(name))
+def loaded(conn: sqlite3.Connection) -> None:
+    store.import_watchlist(
+        conn, [watched("Grupo", "MATRIZ SA"), watched("Grupo", "FILIAL UNO SA")], DAY
+    )
+    p = Pipeline(conn, Matcher(store.load_watch_index(conn)), GroupIndex({}, {}, [], {}))
+    powers = "Apoderado: PERSONA UNO;PERSONA DOS"
+    ref, doc = document(
+        "BORME-A-2026-181-28",
+        DAY,
+        announcement(1, "MATRIZ SA", ("revocation", powers), ("insolvency", "Auto"), inscribed=DAY),
+        announcement(2, "FILIAL UNO SA", ("revocation", powers), inscribed=DAY),
+        announcement(
+            3, "FILIAL UNO SA", ("appointment", "Adm. Unico: PERSONA TRES"), inscribed=DAY
+        ),
+    )
+    p.process_document(ref, doc)
 
 
-def candidates(*names: str) -> dict[str, str]:
-    return {normalize_name(n): n for n in names}
-
-
-def announcement(name: str, *acts: tuple[str, str]) -> StoredAnnouncement:
-    return StoredAnnouncement(
-        document_id="BORME-A-2026-183-28",
-        number=1,
-        pub_date="2026-09-22",
-        province="MADRID",
-        company_name=name,
-        company_norm=normalize_name(name),
-        inscription_date="2026-09-15",
-        acts=tuple(StoredAct(t, t, d) for t, d in acts),
+def text(conn: sqlite3.Connection, details: bool) -> str:
+    return render(
+        conn,
+        DAY,
+        DAY,
+        record.differences(conn),
+        [],
+        {"documents": 1},
+        details=details,
     )
 
 
-def test_report_separates_confirmed_from_review_and_can_hide_details() -> None:
-    watch = [entry("ACME SA"), entry("OTRA SA")]
-    matches = match_names(watch, candidates("ACME SOCIEDAD ANONIMA", "ACME SL"))
-    anns = {
-        "ACME SA": [
-            announcement(
-                "ACME SOCIEDAD ANONIMA",
-                ("appointment", "Consejero: PERSONA 1"),
-                ("insolvency", "Auto de declaración de concurso"),
-            )
-        ],
-        "ACME SL": [announcement("ACME SL", ("address_change", "C/ MAYOR 1 (MADRID)"))],
-    }
-    report = render_alerts(watch, matches, anns, since=date(2026, 9, 1), threshold=90)
-
-    confirmed, review = report.split("## Needs review")
-    assert "### ACME SOCIEDAD ANONIMA" in confirmed
-    assert "announcements: 1 | highest priority: high" in confirmed
-    assert "Consejero: PERSONA 1" in confirmed
-    assert "| ACME SA | ACME SL | 100.0 | same name, legal form SL vs SA | 1 |" in review
-    assert "- OTRA SA" in review  # listed under entries without hits
-
-    hidden = render_alerts(watch, matches, anns, since=None, threshold=90, details=False)
-    assert "PERSONA 1" not in hidden
-    assert "Insolvency proceedings (concurso)" in hidden
+def test_sections_links_and_clusters(conn: sqlite3.Connection) -> None:
+    loaded(conn)
+    report = text(conn, details=True)
+    for n in range(1, 8):
+        assert f"## {n}." in report
+    assert "[PDF](https://www.boe.es/borme/dias/2026/09/21/pdfs/BORME-A-2026-181-28.pdf)" in report
+    alerts = report.split("## 3.")[1].split("## 4.")[0]
+    assert "Insolvency proceedings" in alerts
+    assert "Revocation" not in alerts  # attorney acts never reach the alerts
+    clusters = report.split("## 6.")[1].split("## 7.")[0]
+    assert "PERSONA UNO" in clusters and "| 2 |" in clusters  # two group companies
 
 
-def test_report_without_matches() -> None:
-    report = render_alerts([entry("ACME SA")], [], {}, since=None, threshold=90)
-    assert "No exact matches in this window." in report
-    assert "No similar names above the threshold." in report
+def test_shared_version_has_no_names_and_aggregates_people(conn: sqlite3.Connection) -> None:
+    loaded(conn)
+    report = text(conn, details=False)
+    assert "PERSONA" not in report
+    clusters = report.split("## 6.")[1].split("## 7.")[0]
+    assert "| 2026-09-21 | Grupo | revocation | 2 | 4 |" in clusters
+    movements = report.split("## 7.")[1]
+    assert "| Grupo | FILIAL UNO SA | sole_director | appointment | 1 |" in movements

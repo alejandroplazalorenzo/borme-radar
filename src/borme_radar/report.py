@@ -1,115 +1,294 @@
-"""Markdown rendering of watchlist alerts."""
+"""The run report: seven sections, the review queue and coverage.
+
+1. The record against the Registro (what ``sync`` would change).
+2. New companies of the watched groups (candidates, triaged).
+3. Alerts: insolvency, dissolution, extinction, mergers, capital reductions...
+4. Changes in the board.
+5. Other corporate changes.
+6. Clusters: the same person gaining or losing powers in two or more companies of the
+   same group on the same day (one attorney is paperwork; four at once means someone
+   left).
+7. Who joins and who leaves the boards.
+
+With ``details=False`` the report carries no act text and no personal names: sections
+6 and 7 are aggregated to counts. That is the only form in which reports are shared.
+Every act links to the official PDF, the authentic edition.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import sqlite3
+from collections import Counter
+from collections.abc import Sequence
 from datetime import date
 
 from borme_radar.acts import ACT_TYPES
-from borme_radar.matching import Match, WatchEntry
-from borme_radar.store import StoredAnnouncement
+from borme_radar.record import Difference
+from borme_radar.triage import Scored
 
-_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-_DETAIL_MAX = 160
-
-
-def _priority(act_type: str) -> str:
-    known = ACT_TYPES.get(act_type)
-    return known.priority if known else "low"
+_DETAIL_MAX = 150
+_LIST_MAX = 60
 
 
-def _cell(text: str) -> str:
+def _cell(value: object) -> str:
+    text = "" if value is None else str(value)
     return text.replace("|", "\\|").replace("\n", " ")
 
 
-def _short(text: str) -> str:
-    return text if len(text) <= _DETAIL_MAX else text[: _DETAIL_MAX - 1].rstrip() + "…"
+def _short(text: str | None, limit: int = _DETAIL_MAX) -> str:
+    text = text or ""
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def _top_priority(items: Sequence[StoredAnnouncement]) -> str:
-    priorities = [_priority(act.act_type) for a in items for act in a.acts]
-    return min(priorities, key=_PRIORITY_ORDER.__getitem__) if priorities else "-"
+def _table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str]:
+    if not rows:
+        return ["_Nothing in this window._"]
+    out = ["| " + " | ".join(headers) + " |", "|" + "|".join("---" for _ in headers) + "|"]
+    out += ["| " + " | ".join(_cell(v) for v in row) + " |" for row in rows]
+    return out
 
 
-def _act_table(items: Sequence[StoredAnnouncement], details: bool) -> list[str]:
-    header = "| Published | Province | Announcement | Act | Priority |"
-    rule = "|---|---|---|---|---|"
+def _label(act_type: str) -> str:
+    return ACT_TYPES[act_type].label if act_type in ACT_TYPES else act_type
+
+
+def _pdf(url: str | None) -> str:
+    return f"[PDF]({url})" if url else ""
+
+
+def _acts(
+    conn: sqlite3.Connection,
+    start: date,
+    end: date,
+    priority: str,
+    scopes: tuple[str, ...],
+    details: bool,
+) -> list[list[object]]:
+    marks = ",".join("?" for _ in scopes)
+    rows = conn.execute(
+        f"""
+        SELECT a.pub_date, g.name AS grp, c.name AS company, t.act_type, t.detail, d.url_pdf
+        FROM acts t
+        JOIN announcements a USING (document_id, number)
+        JOIN companies c ON c.company_id = a.company_id
+        JOIN groups g ON g.group_id = c.group_id
+        JOIN documents d ON d.document_id = a.document_id
+        WHERE a.pub_date BETWEEN ? AND ? AND t.priority = ? AND t.scope IN ({marks})
+        ORDER BY a.pub_date DESC, c.name, t.seq
+        """,
+        (start.isoformat(), end.isoformat(), priority, *scopes),
+    ).fetchall()
+    out: list[list[object]] = []
+    for row in rows:
+        line: list[object] = [row["pub_date"], row["grp"], row["company"], _label(row["act_type"])]
+        if details:
+            line.append(_short(row["detail"]))
+        line.append(_pdf(row["url_pdf"]))
+        out.append(line)
+    return out
+
+
+def _clusters(
+    conn: sqlite3.Connection, start: date, end: date, details: bool
+) -> tuple[list[str], list[list[object]]]:
+    rows = conn.execute(
+        """
+        SELECT e.event_date, g.name AS grp, e.holder, e.holder_norm, e.event,
+               COUNT(DISTINCT e.company_id) AS n,
+               group_concat(DISTINCT c.name) AS companies
+        FROM officer_events e
+        JOIN companies c ON c.company_id = e.company_id
+        JOIN groups g ON g.group_id = c.group_id
+        WHERE e.scope = 'attorney' AND e.event_date BETWEEN ? AND ?
+        GROUP BY e.event_date, g.group_id, e.holder_norm, e.event
+        HAVING COUNT(DISTINCT e.company_id) >= 2
+        ORDER BY n DESC, e.event_date DESC
+        """,
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
     if details:
-        header += " Detail |"
-        rule += "---|"
-    lines = [header, rule]
-    for ann in items:
-        for act in ann.acts:
-            label = ACT_TYPES[act.act_type].label if act.act_type in ACT_TYPES else act.act_type
-            row = (
-                f"| {ann.pub_date} | {_cell(ann.province)} | {ann.document_id} #{ann.number} "
-                f"| {label} | {_priority(act.act_type)} |"
-            )
-            if details:
-                row += f" {_cell(_short(act.detail))} |"
-            lines.append(row)
-    return lines
+        headers = ["Date", "Group", "Person", "Event", "Companies", "Which"]
+        return headers, [
+            [r["event_date"], r["grp"], r["holder"], r["event"], r["n"], _short(r["companies"], 80)]
+            for r in rows
+        ]
+    agg: Counter[tuple[str, str, str]] = Counter()
+    companies: Counter[tuple[str, str, str]] = Counter()
+    for r in rows:
+        agg[(r["event_date"], r["grp"], r["event"])] += 1
+        companies[(r["event_date"], r["grp"], r["event"])] += r["n"]
+    headers = ["Date", "Group", "Event", "People in a cluster", "Company-positions"]
+    return headers, [[*k, n, companies[k]] for k, n in sorted(agg.items(), reverse=True)]
 
 
-def render_alerts(
-    watchlist: Sequence[WatchEntry],
-    matches: Sequence[Match],
-    announcements: Mapping[str, Sequence[StoredAnnouncement]],
-    *,
-    since: date | None,
-    threshold: float,
+def _movements(
+    conn: sqlite3.Connection, start: date, end: date, details: bool
+) -> tuple[list[str], list[list[object]]]:
+    rows = conn.execute(
+        """
+        SELECT e.event_date, g.name AS grp, c.name AS company, e.role, e.event, e.holder,
+               e.is_company
+        FROM officer_events e
+        JOIN companies c ON c.company_id = e.company_id
+        JOIN groups g ON g.group_id = c.group_id
+        WHERE e.scope = 'board' AND e.event_date BETWEEN ? AND ?
+        ORDER BY e.event_date DESC, c.name, e.role
+        """,
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
+    if details:
+        headers = ["Date", "Group", "Company", "Role", "Event", "Holder"]
+        return headers, [
+            [r["event_date"], r["grp"], r["company"], r["role"], r["event"], r["holder"]]
+            for r in rows
+        ]
+    agg: Counter[tuple[str, str, str, str]] = Counter(
+        (r["grp"], r["company"], r["role"], r["event"]) for r in rows
+    )
+    headers = ["Group", "Company", "Role", "Event", "Holders"]
+    return headers, [[*k, n] for k, n in sorted(agg.items())]
+
+
+def render(
+    conn: sqlite3.Connection,
+    start: date,
+    end: date,
+    differences: Sequence[Difference],
+    candidates: Sequence[Scored],
+    coverage: dict[str, object],
     details: bool = True,
 ) -> str:
-    """Render confirmed alerts, then fuzzy candidates that need a human decision."""
-    confirmed = [m for m in matches if m.status == "confirmed"]
-    review = [m for m in matches if m.status == "needs_review"]
-    hit_names = {m.watch.norm for m in matches}
+    out: list[str] = [
+        f"# BORME radar: {start.isoformat()} to {end.isoformat()}",
+        "",
+        "> Watched groups against the Registro Mercantil. Source: BORME, open data of "
+        "the Agencia Estatal Boletín Oficial del Estado (https://www.boe.es). Derived and "
+        "unofficial output; the linked PDF is the authentic edition.",
+        "",
+    ]
+    if not details:
+        out += ["> Shareable version: no act text and no personal names.", ""]
 
-    out: list[str] = ["# BORME watchlist alerts", ""]
-    out.append(
-        f"Watchlist: {len(watchlist)} companies. Window: "
-        f"{'since ' + since.isoformat() if since else 'all stored gazettes'}. "
-        f"Fuzzy threshold: {threshold:g}."
+    pdfs = dict(conn.execute("SELECT document_id, url_pdf FROM documents").fetchall())
+    out += ["## 1. The record against the Registro", ""]
+    out += [
+        "Fields where the record is behind the resolved registry value (last value "
+        "inscribed; a revert means the evidence of an applied change disappeared). "
+        "Written only with `borme-radar sync --apply`. **Nothing is applied by itself.**",
+        "",
+    ]
+    out += _table(
+        ["Company", "Field", "Record", "Registro", "Since", "Kind", "Official"],
+        [
+            [
+                d.company,
+                d.field,
+                _short(d.record, 60) or "(empty)",
+                _short(d.registry, 60),
+                d.fact_date,
+                d.kind,
+                _pdf(pdfs.get(d.document_id or "")),
+            ]
+            for d in differences
+        ],
     )
-    out.append("")
-    out.append(
-        f"- Confirmed (exact normalised name): {len(confirmed)} companies\n"
-        f"- Needs review (similar name, not confirmed): {len(review)} candidates\n"
-        f"- Watchlist entries without any hit: {len(watchlist) - len(hit_names)}"
+
+    tiers = Counter(c.tier for c in candidates)
+    reasons = Counter(c.reason for c in candidates)
+    out += ["", "## 2. New companies of the watched groups", ""]
+    by_signal = ", ".join(f"{k}: {v}" for k, v in sorted(reasons.items())) or "none"
+    out += [
+        f"{len(candidates)} pending candidates ({by_signal}). "
+        f"Tiers: review first {tiers['review first']}, worth a look {tiers['worth a look']}, "
+        f"long tail {tiers['long tail']}. They are never added by themselves: the BORME "
+        "publishes no tax ID, and the order is a triage, not a decision.",
+        "",
+    ]
+    shown = [c for c in candidates if c.tier != "long tail"][:_LIST_MAX]
+    out += _table(
+        [
+            "Tier",
+            "Score",
+            "Group",
+            "Company",
+            "Province",
+            "Signal",
+            "Evidence",
+            "Announcements",
+            "Period",
+        ],
+        [
+            [
+                c.tier,
+                c.score,
+                c.group,
+                c.company_name,
+                c.province,
+                c.reason,
+                _short(c.evidence, 60),
+                c.n_announcements,
+                f"{c.first_date} to {c.last_date}",
+            ]
+            for c in shown
+        ],
     )
 
-    out += ["", "## Confirmed alerts", ""]
-    if not confirmed:
-        out.append("No exact matches in this window.")
-    for m in confirmed:
-        items = announcements.get(m.company_norm, [])
-        out += [
-            f"### {m.company_name}",
-            "",
-            f"Watchlist entry: {m.watch.name} | announcements: {len(items)} "
-            f"| highest priority: {_top_priority(items)}",
-            "",
-            *_act_table(items, details),
-            "",
-        ]
+    act_headers = (
+        ["Published", "Group", "Company", "Act"] + (["Detail"] if details else []) + ["Official"]
+    )
+    out += ["", "## 3. Alerts: insolvency, dissolution, mergers, capital", ""]
+    out += _table(act_headers, _acts(conn, start, end, "high", ("company", "board"), details))
+    out += ["", "## 4. Changes in the board", ""]
+    out += _table(act_headers, _acts(conn, start, end, "medium", ("board",), details))
+    out += ["", "## 5. Other corporate changes", ""]
+    out += _table(act_headers, _acts(conn, start, end, "medium", ("company",), details))
 
-    out += ["## Needs review (fuzzy, NOT confirmed)", ""]
-    if not review:
-        out.append("No similar names above the threshold.")
-    else:
-        out += [
-            "| Watchlist entry | Name in BORME | Score | Reason | Announcements |",
-            "|---|---|---|---|---|",
-        ]
-        for m in review:
-            n_items = len(announcements.get(m.company_norm, []))
-            out.append(
-                f"| {_cell(m.watch.name)} | {_cell(m.company_name)} | {m.score:.1f} "
-                f"| {_cell(m.reason)} | {n_items} |"
-            )
+    headers, rows = _clusters(conn, start, end, details)
+    out += ["", "## 6. Clusters of powers", ""]
+    out += [
+        "Single attorneys are not reported. These are: the same person gaining or losing "
+        "powers in two or more companies of the same group on the same day.",
+        "",
+    ]
+    out += _table(headers, rows)
 
-    missing = [w.name for w in watchlist if w.norm not in hit_names]
-    out += ["", "## Watchlist entries without hits", ""]
-    out += [f"- {name}" for name in missing] or ["(none)"]
-    out.append("")
+    headers, rows = _movements(conn, start, end, details)
+    out += ["", "## 7. Who joins and who leaves", ""]
+    out += [
+        "Board appointments, removals, revocations and re-elections, dated by inscription. "
+        "The full history is in `officer_events`; who holds each position today, in the "
+        "`current_officers` view (local database only).",
+        "",
+    ]
+    out += _table(headers, rows)
+
+    review = conn.execute(
+        """
+        SELECT a.pub_date, a.company_name, a.province, c.name AS watched, r.score, r.reason
+        FROM review_queue r
+        JOIN announcements a USING (document_id, number)
+        JOIN companies c ON c.company_id = r.company_id
+        WHERE a.pub_date BETWEEN ? AND ?
+        ORDER BY r.score DESC, a.pub_date DESC
+        """,
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
+    out += ["", "## Review queue: similar names, never matched", ""]
+    out += _table(
+        ["Published", "Name in BORME", "Province", "Resembles", "Score", "Reason"],
+        [[r[0], r[1], r[2], r[3], f"{r[4]:.1f}", r[5]] for r in review],
+    )
+
+    out += ["", "## Coverage of this window", ""]
+    out += [f"- {key}: **{value}**" for key, value in coverage.items()]
+    out += [
+        "",
+        "## Not covered",
+        "",
+        "- Section C (legal notices: general meetings, creditor notices): free prose, "
+        "another parser.",
+        "- Competitors: new companies of the sector by corporate purpose.",
+        "- The BORME publishes no tax ID and no deal values.",
+        "",
+    ]
     return "\n".join(out)
