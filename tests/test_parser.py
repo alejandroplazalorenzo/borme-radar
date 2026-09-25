@@ -9,7 +9,13 @@ import pytest
 
 from borme_radar.models import Announcement, Document
 from borme_radar.normalize import normalize_name
-from borme_radar.parser import ParseError, parse_document, parse_inscription_date
+from borme_radar.parser import (
+    NAME_MAX,
+    ParseError,
+    parse_document,
+    parse_inscription_date,
+    parse_sheet,
+)
 
 
 @pytest.fixture
@@ -153,3 +159,84 @@ def test_truncated_or_malformed_documents_raise(fixtures: Path) -> None:
 )
 def test_parse_inscription_date(registry: str | None, expected: date | None) -> None:
     assert parse_inscription_date(registry) == expected
+
+
+@pytest.mark.parametrize(
+    ("registry", "sheet"),
+    [
+        ("S 8 , H M 786863, I/A 11 ( 9.09.26)", "M 786863"),
+        ("S 8 , H PM 34762, I/A 5", "PM 34762"),
+        ("S 2 , H 156220, I/A 1 ( 2.09.26)", "156220"),  # some registries print no letters
+        ("S 8, H GR 12687", "GR 12687"),
+        ("sin hoja", None),
+        (None, None),
+    ],
+)
+def test_parse_sheet(registry: str | None, sheet: str | None) -> None:
+    assert parse_sheet(registry) == sheet
+
+
+def test_announcements_carry_the_registry_sheet(madrid: Document) -> None:
+    assert madrid.announcements[0].sheet == "M 786863"
+    assert all(a.sheet for a in madrid.announcements)
+
+
+def test_scope_and_priority_of_acts(madrid: Document, balears: Document) -> None:
+    for doc in (madrid, balears):
+        for ann in doc.announcements:
+            for act in ann.acts:
+                assert act.scope in {"board", "attorney", "auditor", "company"}
+                if act.scope in ("attorney", "auditor"):
+                    assert act.priority == "low"  # never above low, whatever the type
+    extinction = by_number(madrid, 423967).acts[-1]
+    assert (extinction.act_type, extinction.scope, extinction.priority) == (
+        "extinction",
+        "company",
+        "high",
+    )
+
+
+@pytest.fixture
+def granada(fixtures: Path) -> Document:
+    return parse_document((fixtures / "BORME-B-2026-113-18.xml").read_bytes())
+
+
+def test_section_b_types_come_from_the_table_heading(granada: Document) -> None:
+    assert granada.section == "B"
+    assert [(a.number, a.acts[0].act_type) for a in granada.announcements] == [
+        (342, "registry_sheet_reopening"),
+        (343, "registry_sheet_reopening"),
+        (344, "registry_sheet_reopening"),
+        (345, "global_transfer_project"),
+        (346, "merger_project"),
+        (347, "split_project"),
+    ]
+    merger = by_number(granada, 346)
+    assert merger.company_name == "MULTISER MALAGA SL"
+    assert merger.inscription_date == date(2026, 1, 2)  # deposit date
+    assert merger.acts[0].detail == "Absorbidas: CASA OSSORIO CALVACHE SOCIEDAD LIMITADA"
+    assert merger.acts[0].priority == "high"
+
+
+def test_section_b_registry_data_glued_to_the_name(granada: Document) -> None:
+    reopened = by_number(granada, 342)
+    assert reopened.company_name == "COMPAÑIA MINERA DEL MARQUESADO SLL EN LIQUIDACION"
+    assert reopened.sheet == "GR 12687"
+    assert normalize_name(reopened.company_name) == "COMPANIA MINERA DEL MARQUESADO SLL"
+
+
+def test_section_b_long_header_is_a_list_of_companies() -> None:
+    names = ". ".join(f"EMPRESA NUMERO {i} SOCIEDAD LIMITADA" for i in range(12))
+    xml = f"""<documento><metadatos>
+      <identificador>BORME-B-2026-1-28</identificador><titulo>MADRID</titulo>
+      <diario_numero>1</diario_numero><fecha_publicacion>20260102</fecha_publicacion>
+    </metadatos><texto>
+      <p class="centro_redonda">Depósitos de proyectos de fusión por unión</p>
+      <p class="articulo">5 - {names}. (01/12/2025)</p>
+    </texto></documento>"""
+    ann = parse_document(xml.encode()).announcements[0]
+    assert len(names) > NAME_MAX
+    assert ann.company_name == "EMPRESA NUMERO 0 SOCIEDAD LIMITADA"
+    assert len(ann.other_companies) == 11
+    assert ann.acts[0].act_type == "merger_project"
+    assert ann.acts[0].detail.startswith("Listed with: EMPRESA NUMERO 1 SOCIEDAD LIMITADA;")

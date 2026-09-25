@@ -1,10 +1,20 @@
-"""Catalogue of BORME Section A act headings and the splitter that uses it.
+"""Catalogue of BORME act headings, the Section A splitter and act priorities.
 
 An announcement body is a run of ``Heading. detail. Heading. detail...`` where the
 headings come from a closed vocabulary used by the Registro Mercantil. The splitter only
 cuts at headings from this catalogue, so a heading-like phrase inside free text (for
 example inside a by-laws article) does not create a spurious act unless it exactly
-matches a known heading followed by ``.`` or ``:``.
+matches a known heading followed by ``.`` or ``:``. Headings are matched with or without
+the accents the Registro sometimes omits.
+
+Section B ("Otros actos publicados") has no headings inside the paragraph: the act type
+is the heading of the table the announcement sits in, e.g. "Depósitos de proyectos de
+fusión por absorción". The deposit of a merger or split project is the earliest public
+sign of the operation: by the time the merger is inscribed in Section A it is done.
+
+Priority depends on the act type **and on its scope** (who it is about): an attorney
+or auditor act never rises above ``low``, however important its type. Giving and
+taking signing powers is maintenance.
 """
 
 from __future__ import annotations
@@ -44,6 +54,17 @@ ACT_TYPES: dict[str, ActType] = {
         ActType("split", "Split / spin-off", "high"),
         ActType("global_asset_transfer", "Global transfer of assets and liabilities", "high"),
         ActType("capital_reduction", "Capital reduction", "high"),
+        # Section B: deposits of projects (the operation is announced, not yet done).
+        ActType("merger_project", "Merger project deposited (Section B)", "high"),
+        ActType("split_project", "Split / spin-off project deposited (Section B)", "high"),
+        ActType(
+            "global_transfer_project",
+            "Global asset transfer project deposited (Section B)",
+            "high",
+        ),
+        ActType("transfer_abroad_project", "Transfer abroad project deposited (Section B)", "high"),
+        ActType("project_cancellation", "Deposited project cancelled (Section B)", "medium"),
+        ActType("section_b_other", "Other Section B entry", "medium"),
         # Governance, ownership and identity changes.
         ActType("incorporation", "Incorporation", "medium"),
         ActType("appointment", "Appointment (directors, auditors, attorneys)", "medium"),
@@ -154,9 +175,46 @@ _REGISTRY_RE = re.compile(r"Datos\s+registrales[.:]")
 _VOWELS = {"a": "aá", "e": "eé", "i": "ií", "o": "oó", "u": "uúü"}
 
 
+# Section B table headings (plain, lowercase, no accents) -> act type. Checked by
+# prefix, longest first. The headings are the ones counted in the cached gazette.
+_SECTION_B: tuple[tuple[str, str], ...] = (
+    ("cancelaciones de depositos de proyectos", "project_cancellation"),
+    ("cierre provisional de hoja registral", "registry_sheet_closure"),
+    ("reapertura de hoja registral", "registry_sheet_reopening"),
+    ("depositos de proyectos de fusion", "merger_project"),
+    ("depositos de proyectos de escision", "split_project"),
+    ("depositos de proyectos de segregacion", "split_project"),
+    ("depositos de proyectos de cesion global", "global_transfer_project"),
+    ("depositos de proyectos de traslado", "transfer_abroad_project"),
+)
+
+
 def _strip_accents(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text)
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def section_b_type(heading: str) -> str:
+    """Act type of a Section B table heading; unknown headings stay visible as such."""
+    key = " ".join(_strip_accents(heading).lower().split())
+    for prefix, act_type in _SECTION_B:
+        if key.startswith(prefix):
+            return act_type
+    return "section_b_other"
+
+
+def priority(act_type: str, scope: str) -> Priority:
+    """Priority of an act once its scope is known (see module docstring)."""
+    if scope in ("attorney", "auditor"):
+        return "low"
+    known = ACT_TYPES.get(act_type)
+    base = known.priority if known else "low"
+    if base == "high":
+        return "high"
+    # A change in the board matters even when it is filed under "Otros conceptos".
+    if scope == "board":
+        return "medium"
+    return base
 
 
 def _loose(heading: str) -> str:

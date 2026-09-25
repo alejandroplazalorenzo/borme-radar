@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from borme_radar.normalize import base_and_form, normalize_name
+from borme_radar.normalize import base_and_form, has_legal_form, normalize_name
 
 
 @pytest.mark.parametrize(
@@ -30,6 +30,15 @@ from borme_radar.normalize import base_and_form, normalize_name
         ("CONSTRUCCIONES FARELO HERMANOS SA EN LIQUIDACION", "CONSTRUCCIONES FARELO HERMANOS SA"),
         ("FOO SOCIEDAD LIMITADA EN LIQUIDACIÓN", "FOO SL"),
         ("HSP IBIHOLI, S.L.(R.M. EIVISSA)", "HSP IBIHOLI SL"),
+        # Financial year glued to the name in accounts filings, closed or not.
+        ("APARTAMENTOS EJEMPLO SL(2008)", "APARTAMENTOS EJEMPLO SL"),
+        ("APARTAMENTOS EJEMPLO SL(2009", "APARTAMENTOS EJEMPLO SL"),
+        ("ISLAS EJEMPLO SL(R.M. MADRID)(2008)", "ISLAS EJEMPLO SL"),
+        # Other status suffixes that come and go.
+        ("TALLERES NORTE SL EN CONCURSO", "TALLERES NORTE SL"),
+        ("TALLERES NORTE SA EN CONCURSO DE ACREEDORES", "TALLERES NORTE SA"),
+        ("TALLERES NORTE SL UNIPERSONAL", "TALLERES NORTE SL"),
+        ("TALLERES NORTE SL SOCIEDAD UNIPERSONAL", "TALLERES NORTE SL"),
         # Accents, Ñ and punctuation inside the name.
         ("INDUSTRIA DE DISEÑO TEXTIL, S.A.", "INDUSTRIA DE DISENO TEXTIL SA"),
         ("AENA, S.M.E., S.A.", "AENA SME SA"),
@@ -46,6 +55,16 @@ def test_initials_inside_a_name_are_not_taken_for_a_legal_form() -> None:
 
 def test_a_bare_legal_form_is_not_stripped_to_nothing() -> None:
     assert normalize_name("SL") == "SL"
+
+
+def test_a_year_inside_the_name_is_kept() -> None:
+    assert normalize_name("PROMOCIONES 2008 SL") == "PROMOCIONES 2008 SL"
+
+
+def test_legal_person_detection() -> None:
+    assert has_legal_form("REPSOL, S.A.")
+    assert has_legal_form("X SOCIEDAD LIMITADA")
+    assert not has_legal_form("PERSONA UNO DOS")
 
 
 def test_base_and_form() -> None:

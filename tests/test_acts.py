@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from borme_radar.acts import _HEADINGS, ACT_TYPES, REGISTRY_DATA, split_acts
+from borme_radar.acts import (
+    _HEADINGS,
+    ACT_TYPES,
+    REGISTRY_DATA,
+    priority,
+    section_b_type,
+    split_acts,
+)
 
 
 def types(text: str) -> list[str]:
@@ -73,3 +80,32 @@ def test_catalogue_is_consistent() -> None:
     codes = {code for code, _ in _HEADINGS} - {REGISTRY_DATA}
     assert codes <= set(ACT_TYPES)
     assert {t.priority for t in ACT_TYPES.values()} <= {"high", "medium", "low"}
+
+
+def test_section_b_headings_map_to_act_types() -> None:
+    assert section_b_type("Depósitos de proyectos de fusión por absorción") == "merger_project"
+    assert section_b_type("Depósitos de proyectos de fusión por unión") == "merger_project"
+    assert section_b_type("Depósitos de proyectos de escisión parcial") == "split_project"
+    assert section_b_type("Depósitos de proyectos de segregación") == "split_project"
+    assert (
+        section_b_type("Depósitos de Proyectos de Cesión Global de Activo y Pasivo")
+        == "global_transfer_project"
+    )
+    assert (
+        section_b_type("Cancelaciones de Depósitos de proyectos de fusión por absorción")
+        == "project_cancellation"
+    )
+    assert (
+        section_b_type("Cierre provisional de hoja registral (artículo 378.1 del Reglamento)")
+        == "registry_sheet_closure"
+    )
+    assert section_b_type("Un encabezado nuevo") == "section_b_other"
+
+
+def test_priority_depends_on_scope() -> None:
+    assert priority("appointment", "board") == "medium"
+    assert priority("appointment", "attorney") == "low"
+    assert priority("revocation", "auditor") == "low"
+    assert priority("other", "board") == "medium"  # board change filed under "Otros"
+    assert priority("merger_project", "company") == "high"
+    assert priority("website", "company") == "low"
