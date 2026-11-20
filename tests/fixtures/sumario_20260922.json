@@ -1,0 +1,97 @@
+{
+  "status": {
+    "code": "200",
+    "text": "ok"
+  },
+  "data": {
+    "sumario": {
+      "metadatos": {
+        "publicacion": "BORME",
+        "fecha_publicacion": "20260922"
+      },
+      "diario": [
+        {
+          "numero": "183",
+          "sumario_diario": {
+            "identificador": "BORME-S-2026-183",
+            "url_pdf": {
+              "szBytes": "222572",
+              "szKBytes": "217",
+              "texto": "https://www.boe.es/borme/dias/2026/09/22/pdfs/BORME-S-2026-183.pdf"
+            }
+          },
+          "seccion": [
+            {
+              "codigo": "A",
+              "nombre": "SECCIÓN PRIMERA. Empresarios. Actos inscritos",
+              "item": [
+                {
+                  "identificador": "BORME-A-2026-183-07",
+                  "titulo": "ILLES BALEARS",
+                  "url_pdf": {
+                    "szBytes": "233889",
+                    "szKBytes": "228",
+                    "pagina_inicial": "44585",
+                    "pagina_final": "44589",
+                    "texto": "https://www.boe.es/borme/dias/2026/09/22/pdfs/BORME-A-2026-183-07.pdf"
+                  },
+                  "url_html": "https://www.boe.es/diario_borme/txt.php?id=BORME-A-2026-183-07",
+                  "url_xml": "https://www.boe.es/diario_borme/xml.php?id=BORME-A-2026-183-07"
+                },
+                {
+                  "identificador": "BORME-A-2026-183-28",
+                  "titulo": "MADRID",
+                  "url_pdf": {
+                    "szBytes": "856346",
+                    "szKBytes": "836",
+                    "pagina_inicial": "44632",
+                    "pagina_final": "44669",
+                    "texto": "https://www.boe.es/borme/dias/2026/09/22/pdfs/BORME-A-2026-183-28.pdf"
+                  },
+                  "url_html": "https://www.boe.es/diario_borme/txt.php?id=BORME-A-2026-183-28",
+                  "url_xml": "https://www.boe.es/diario_borme/xml.php?id=BORME-A-2026-183-28"
+                },
+                {
+                  "identificador": "BORME-A-2026-183-99",
+                  "titulo": "ÍNDICE ALFABÉTICO DE SOCIEDADES",
+                  "url_pdf": {
+                    "szBytes": "1352390",
+                    "szKBytes": "1321",
+                    "pagina_inicial": "44725",
+                    "pagina_final": "44757",
+                    "texto": "https://www.boe.es/borme/dias/2026/09/22/pdfs/BORME-A-2026-183-99.pdf"
+                  },
+                  "url_html": "https://www.boe.es/diario_borme/txt.php?id=BORME-A-2026-183-99",
+                  "url_xml": "https://www.boe.es/diario_borme/xml.php?id=BORME-A-2026-183-99"
+                }
+              ]
+            },
+            {
+              "codigo": "C",
+              "nombre": "SECCIÓN SEGUNDA. Anuncios y avisos legales",
+              "apartado": [
+                {
+                  "codigo": "001",
+                  "nombre": "BALANCES",
+                  "item": {
+                    "identificador": "BORME-C-2026-5084",
+                    "titulo": "INSTALADORES SANITARIOS, S.A. (EN LIQUIDACIÓN)",
+                    "url_pdf": {
+                      "szBytes": "191346",
+                      "szKBytes": "187",
+                      "pagina_inicial": "6321",
+                      "pagina_final": "6321",
+                      "texto": "https://www.boe.es/borme/dias/2026/09/22/pdfs/BORME-C-2026-5084.pdf"
+                    },
+                    "url_html": "https://www.boe.es/diario_borme/txt.php?id=BORME-C-2026-5084",
+                    "url_xml": "https://www.boe.es/diario_borme/xml.php?id=BORME-C-2026-5084"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
