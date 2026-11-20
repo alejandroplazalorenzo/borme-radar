@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source: Agencia Estatal Boletin Oficial del Estado (https://www.boe.es). MODIFIED copy: trimmed to a few announcements and natural-person names replaced by PERSONA N (scripts/make_fixture.py, plus a separate edit where a role or a heading was glued to the name). fecha_actualizacion kept as published. -->
+<documento fecha_actualizacion="20260528T134814Z">
+  <metadatos>
+    <identificador>BORME-A-2026-58-28</identificador>
+    <titulo>MADRID</titulo>
+    <diario>Boletín Oficial del Registro Mercantil</diario>
+    <diario_numero>58</diario_numero>
+    <seccion codigo="A">SECCIÓN PRIMERA. Empresarios. Actos inscritos</seccion>
+    <fecha_publicacion>20260325</fecha_publicacion>
+    <pagina_inicial>15600</pagina_inicial>
+    <pagina_final>15652</pagina_final>
+    <url_pdf>https://www.boe.es/borme/dias/2026/03/25/pdfs/BORME-A-2026-58-28.pdf</url_pdf>
+  </metadatos>
+  <texto>
+    <p class="articulo">150832 - PKF ATTEST BLUEWAY SL.</p>
+    <p class="parrafo">Ceses/Dimisiones. Consejero: PERSONA 1;PERSONA SAS DOCE;PERSONA 3;PERSONA 4. Presidente: PERSONA SAS DOCE. SecreNoConsj: PERSONA 5. Nombramientos. Adm. Solid.: PERSONA 4;PERSONA 3. Otros conceptos: Cambio del Organo de Administración: Consejo de administración a Administradores solidarios.  Datos registrales. S 8 , H M 682182, I/A 11 (18.03.26).</p>
+    <p class="articulo">150862 - AIR LIQUIDE HEALTHCARE ESPAÑA SL.</p>
+    <p class="parrafo">Revocaciones. Apo.Manc.: PERSONA 6. Apoderado: PERSONA 6. Apo.Sol.: PERSONA 9;PERSONA 10;PERSONA 11;PERSONA 12;PERSONA 13;PERSONA 14;PERSONA QUINCENombramientos. Apo.Sol.: PERSONA 7;PERSONA 8. Otros conceptos: Ampliado el poder otorgado a doña Persona Dieciséis, en escritura que causó la inscripción 58 en la hoja de la sociedad.  Datos registrales. S 8 , H M 410207, I/A 91 (18.03.26).</p>
+  </texto>
+</documento>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source: Agencia Estatal Boletin Oficial del Estado (https://www.boe.es). MODIFIED copy: trimmed to a few announcements and natural-person names replaced by PERSONA N (scripts/make_fixture.py, plus a separate edit where a role or a heading was glued to the name). fecha_actualizacion kept as published. -->
+<documento fecha_actualizacion="20260528T134814Z">
+  <metadatos>
+    <identificador>BORME-A-2026-69-28</identificador>
+    <titulo>MADRID</titulo>
+    <diario>Boletín Oficial del Registro Mercantil</diario>
+    <diario_numero>69</diario_numero>
+    <seccion codigo="A">SECCIÓN PRIMERA. Empresarios. Actos inscritos</seccion>
+    <fecha_publicacion>20260413</fecha_publicacion>
+    <pagina_inicial>18503</pagina_inicial>
+    <pagina_final>18539</pagina_final>
+    <url_pdf>https://www.boe.es/borme/dias/2026/04/13/pdfs/BORME-A-2026-69-28.pdf</url_pdf>
+  </metadatos>
+  <texto>
+    <p class="articulo">178012 - KEYB IT SOLUTIONS SL.</p>
+    <p class="parrafo">Ampliación del objeto social. El objeto de la sociedad lo constituye: Servicios informáticos. Montaje y mantenimiento a empresas y particulares de todo tipo de Hardware y software informático. Venta de equipos nuevos o de segunda mano y consultoría informática a empresas. Infraestructura informática, tratamiento de datos... Cambio de domicilio social. C/ FUENTESPINA 14 - ESCALERA 2 PLANTA 7ª, LETRA B (MADRID).  Datos registrales. S 8 , H M 641040, I/A 3 ( 6.04.26).</p>
+    <p class="articulo">178035 - ARADA CP II SCR SA.</p>
+    <p class="parrafo">Constitución. Comienzo de operaciones: inscripción CNMV. Objeto social: Actividades de fondos de inversión monetarios y no monetarios. Domicilio: PLAZA DE LA INDEPENDENCIA 6 28001 (MADRID). Capital suscrito: 1.200.000,00 Euros. Desembolsado: 1.200.000,00 Euros. Nombramientos. Adm. Unico: PERSONA 1. Ent. Gestora: ABANTE ASESORES GESTION SGIIC SA. EntidDeposit: BANCO INVERSIS SA.  Datos registrales. S 8 , H M 883468, I/A 1 ( 6.04.26).</p>
+    <p class="articulo">178075 - INVERSIONES VERDINOS SL.</p>
+    <p class="parrafo">Ceses/Dimisiones. Adm. Solid.: PERSONA 11;LOS CAÑOS DE LA FUENTE INVERSIONES SL;FRESNO REAL STATE SLRepresentan: PERSONA 2;PERSONA 3. Nombramientos. Adm. Solid.: PERSONA 3;PERSONA 2.  Datos registrales. S 8 , H M 493310, I/A 8 ( 6.04.26).</p>
+    <p class="articulo">178139 - EL RINCON SECRETO SL.</p>
+    <p class="parrafo">Ceses/Dimisiones. Adm. Unico: PERSONA 4. Nombramientos. Adm. Unico: PERSONA 5.  Datos registrales. S 8 , H M 846910,180220, I/ 3 .( 6.04.26).</p>
+    <p class="articulo">178144 - ESKUL PILATES STUDIO SL.</p>
+    <p class="parrafo">Constitución. Comienzo de operaciones: 20.03.26. Objeto social: 1.- Explotación de centros deportivos y de ocio. 2.- Realizar y servir todo tipo de comidas y bebidas preparadas por la propia empresa en las instalaciones o por terceros, para su posterior venta o disfrute en las instalaciones o fuera de ellas. Explotación de establecimientos de bar y cafeterías. Domicilio: C/ RUMANIA 3 - LOCAL 7 (POZUELO DE ALARCON). Capital: 3.000,00 Euros. Nombramientos. Adm. Solid.: PERSONA 6;PERSONA 7;PERSONA 8.  Datos registrales. S 8 , H M 883400,2 , I/ 1 .( 6.04.26).</p>
+    <p class="articulo">178157 - AUTOS MOLIERE SL.</p>
+    <p class="parrafo">Revocaciones. Auditor: TEAM AUDITORES SLP. Nombramientos. Auditor: GRUPO DE AUDITORES PUBLICOS SAP.  Datos registrales. S 8 , H M 734307, I/A 6 ( 6.04.26).</p>
+    <p class="articulo">178271 - SMART PIPELINES SL.</p>
+    <p class="parrafo">Revocaciones. Auditor: PERSONA 9. Aud.Supl.: PERSONA 10. Nombramientos. Auditor: AUDIT MADE IN SPAIN SL.  Datos registrales. S 8 , H M 710927, I/A 4 ( 6.04.26).</p>
+  </texto>
+</documento>

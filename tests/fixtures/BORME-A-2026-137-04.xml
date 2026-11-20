@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source: Agencia Estatal Boletin Oficial del Estado (https://www.boe.es). MODIFIED copy: trimmed to a few announcements and natural-person names replaced by PERSONA N (scripts/make_fixture.py). fecha_actualizacion kept as published. -->
+<documento fecha_actualizacion="20260720T071736Z">
+  <metadatos>
+    <identificador>BORME-A-2026-137-04</identificador>
+    <titulo>ALMERÍA</titulo>
+    <diario>Boletín Oficial del Registro Mercantil</diario>
+    <diario_numero>137</diario_numero>
+    <seccion codigo="A">SECCIÓN PRIMERA. Empresarios. Actos inscritos</seccion>
+    <fecha_publicacion>20260720</fecha_publicacion>
+    <pagina_inicial>35414</pagina_inicial>
+    <pagina_final>35415</pagina_final>
+    <url_pdf>https://www.boe.es/borme/dias/2026/07/20/pdfs/BORME-A-2026-137-04.pdf</url_pdf>
+  </metadatos>
+  <texto>
+    <p class="articulo">337841 - TRANSPORTES J CARRION SOCIEDAD ANONIMA.</p>
+    <p class="parrafo">Otros conceptos: El nombre del domicilio social es ahora "Avenida Parque Cientifico-Tecnológico de Almeria (PITA) 1, planta 4, 04131, por modificación en el Nomenclatur Municipal.  Datos registrales. S 8 , H AL 2541, I/A 67 (10.07.26).</p>
+  </texto>
+</documento>
